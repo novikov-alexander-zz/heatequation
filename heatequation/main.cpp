@@ -93,18 +93,19 @@ public:
 			MPI_Recv(&u[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
 			for (int i = 1; i <= i2 - i1; i++){
 				u[i] = S[i] + u[i] / (u[0] + t[i - 1]);
+
 			}
 			if (rank < size - 1){
 				MPI_Send(&u[i2 - i1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
 			}
-			for (int i = 1; i <= i2; i++){
+			for (int i = 1; i <= i2 - i1; i++){
 				l[i] = gamma / u[i];
 			}
 			MPI_Recv(&y[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
 		}
 
 		for (int i = 0; i < i2 - i1; i++){
-			y[i + 1] = b[i + 1] - l[i] * y[i];
+			y[i + 1] = b[i + 1] - l[i + 1] * y[i];
 		}
 		if (rank < size - 1){
 			MPI_Send(&y[i2 - i1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
@@ -114,6 +115,7 @@ public:
 		}
 		for (int i = i2 - i1 - 1; i >= 0; --i){
 			x[i] = (y[i] - x[i + 1] * beta) / u[i];
+			std::cout << x[i] << std::endl;
 		}
 		if (rank!=0)
 			MPI_Send(&x[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
@@ -125,6 +127,11 @@ public:
 		double *srcData = src->data, *dstData = dst->data;
 		double hh = step*step;
 		double *b = new double[maxi-2];
+		for (int i = 0; i < maxi - 2; i++){
+			b[i] = 0;
+		}
+		b[0] = 10.0/tau;
+		b[maxi - 3] = 10.0/tau;
 		tma(1.0 / hh, 1.0 / tau - 2.0 / hh, 1.0 / hh, maxi-2, b);
 	}
 	
