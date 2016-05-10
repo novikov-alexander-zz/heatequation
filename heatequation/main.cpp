@@ -72,7 +72,11 @@ public:
 				u[i] = S[i] + u[i] / (u[0] + t[i - 1]);
 			}
 			MPI_Send(&u[i2 - 1], 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD);
+			for (int i = 1; i <= i2; i++){
+				l[i] = gamma / u[i];
+			}
 			y[0] = b[0];
+
 		}
 		else {
 			t[0] = 0;
@@ -95,10 +99,20 @@ public:
 				MPI_Send(&u[i2 - i1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
 				std::cout << "Sent" << u[i2 - i1] << std::endl;
 			}
+			for (int i = 1; i <= i2; i++){
+				l[i] = gamma / u[i];
+			}
+			MPI_Recv(&y[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
 		}
-		for (int i = 1; i <= i2; i++){
-			l[i] = gamma / u[i];
+
+		for (int i = 0; i < i2; i++){
+			y[i + 1] = b[i + 1] - l[i] * y[i];
 		}
+		if (rank < size - 1){
+			MPI_Send(&y[i2 - i1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
+			std::cout << "Sent" << u[i2 - i1] << std::endl;
+		}
+
 	}
 
 	inline void solve(Grid *src, Grid *dst){
