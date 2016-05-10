@@ -49,6 +49,7 @@ public:
 		int i1 = (rank == 0) ? 0 : s_size - portion * (size - rank);
 		int i2 = s_size - portion * (size - 1 - rank);
 		double *u = new double[i2 - i1 + 1];
+		double *l = new double[i2 - i1 + 1];
 		double *S = new double[i2 - i1 + 1];
 		double *t = new double[i2 - i1 + 1];
 		double *T = new double[i2 - i1 + 1];
@@ -79,6 +80,9 @@ public:
 			}
 			if (rank < size - 1){
 				MPI_Send(&u[i2 - i1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
+			}
+			for (int i = 1; i <= i2 - i1; i++){
+				l[i] = gamma/u[i];
 			}
 		}
 	}
