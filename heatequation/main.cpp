@@ -91,14 +91,11 @@ public:
 			}
 			u[1] = T[1];
 			MPI_Recv(&u[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
-			std::cout << "Recvd" << u[0] << std::endl;
 			for (int i = 1; i <= i2 - i1; i++){
 				u[i] = S[i] + u[i] / (u[0] + t[i - 1]);
-				std::cout << i + i1 << " " << u[i] << std::endl;
 			}
 			if (rank < size - 1){
 				MPI_Send(&u[i2 - i1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
-				std::cout << "Sent" << u[i2 - i1] << std::endl;
 			}
 			for (int i = 1; i <= i2; i++){
 				l[i] = gamma / u[i];
@@ -106,12 +103,11 @@ public:
 			MPI_Recv(&y[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
 		}
 
-		for (int i = 0; i < i2; i++){
+		for (int i = 0; i < i2 - i1; i++){
 			y[i + 1] = b[i + 1] - l[i] * y[i];
 		}
 		if (rank < size - 1){
 			MPI_Send(&y[i2 - i1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
-			std::cout << "Sent" << u[i2 - i1] << std::endl;
 			MPI_Recv(&x[i2 - i1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &status);
 		} else {
 			x[i2 - i1] = y[i2 - i1] / u[i2 - i1];
@@ -149,6 +145,7 @@ int main(int argc, char *argv[]){
 	Grid *myGrid = new Grid(x, y, h, w);
 	Grid *nextOne = new Grid(x, y, h, w);
 	solver.solve(myGrid, nextOne);
+	MPI_Finalize();
 	return 0;
 }
 
