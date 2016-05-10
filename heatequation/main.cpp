@@ -55,6 +55,7 @@ public:
 		double *t = new double[i2 - i1 + 1];
 		double *T = new double[i2 - i1 + 1];
 		double *y = new double[i2 - i1 + 1];
+		double *x = new double[i2 - i1 + 1];
 
 		if (rank == 0){
 			u[0] = alpha;
@@ -111,7 +112,16 @@ public:
 		if (rank < size - 1){
 			MPI_Send(&y[i2 - i1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
 			std::cout << "Sent" << u[i2 - i1] << std::endl;
+			MPI_Recv(&x[i2 - i1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
+		} else {
+			x[i2 - i1] = y[i2 - i1] / u[i2 - i1];
 		}
+		for (int i = i2 - i1 - 1; i >= 0; --i){
+			x[i] = (y[i] - x[i + 1] * beta) / u[i];
+		}
+		if (rank!=0)
+			MPI_Send(&x[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
+
 
 	}
 
