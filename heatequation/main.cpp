@@ -1,38 +1,9 @@
 #include "mpi.h"
 #include <iostream>
 
+#include "Grid.h"
+
 int rank, size;
-
-class Grid {
-	double xstep, ystep;
-public:
-	double *data;
-	double height, width;
-	int x, y;
-
-	double getXStep(){
-		return xstep;
-	}
-
-	double getYStep(){
-		return xstep;
-	}
-
-	Grid(int x, int y, double height, double width){
-		int portionx = (x / (size + 1));
-		int i1x = (rank == 0) ? 0 : x - portionx * (size - rank);
-		int i2x = x - portionx * (size - 1 - rank);
-		x = i2x - i1x;
-
-		this->height = height;
-		this->width = width;
-		this->xstep = height / x;
-		this->ystep = height / y;
-		this->x = x;
-		this->y = y;
-		data = new double[x*y];
-	}
-};
 
 class Solver{
 public:
@@ -67,7 +38,7 @@ public:
 			y[i*step] = p[i] * y[(i + 1)*step] + q[i];
 	}
 
-	inline void tma(double* dst, double gamma, double alpha, double beta, int s_size, double *bá){
+	inline void tma(double* dst, double gamma, double alpha, double beta, int s_size, double *b){
 		MPI_Status status;
 		double ty,tx;
 		double *u = new double[s_size];
@@ -167,9 +138,8 @@ public:
 		double hh = stepx*stepx;
 		double *b = new double[maxi * maxj];
 		double **bb = new double*[maxj];
-		for (int j = 0; j < maxi*maxj; j++){
-			b[j] = 0;
-		}
+		std::memset(b, 0, maxi*maxj);
+
 		for (int j = 0; j < maxj; j++){
 			bb[j] = &b[j*maxi];
 		}
@@ -197,7 +167,7 @@ public:
 		}
 
 		for (int i = 0; i < maxi; i++){
-			tma_seq(1.0 / hh, 1.0 / (tau/2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
+			tma_seq(dstData, 1.0 / hh, 1.0 / (tau/2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
 		}
 	}
 	
@@ -223,8 +193,13 @@ int main(int argc, char *argv[]){
 	Grid *tempGrid = new Grid(x, y, h, w);
 	Grid *nextOne = new Grid(x, y, h, w);
 
+	myGrid->Clear();
+	tempGrid->Clear();
+	nextOne->Clear();
+
 	Solver solver(0.5);
 	solver.solve(myGrid, nextOne, tempGrid);
+	tempGrid->Print(0);
 	MPI_Finalize();
 	return 0;
 }
