@@ -30,11 +30,11 @@ public:
 		data = new double[x*y];
 	}
 
-	void Clear(){
+	void clear(){
 		std::memset(data, 0, this->x*this->y*sizeof(double));
 	}
 
-	void Print(){
+	void print(){
 		for (int i = 0; i < size; i++) {
 			MPI_Barrier(MPI_COMM_WORLD);
 			if (i == rank) {
@@ -47,7 +47,7 @@ public:
 			}
 		}
 	}
-	void Print(int proc){
+	void print(int proc){
 		if (proc == rank) {
 			for (int x = 0; x < this->x; ++x){
 				for (int y = 0; y < this->y; ++y){
