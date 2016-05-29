@@ -29,7 +29,7 @@ int main(int argc, char *argv[]){
 
 	Solver solver(10);
 	solver.solve(myGrid, nextOne, tempGrid);
-	tempGrid->print();
+	//tempGrid->print();
 	MPI_Finalize();
 	return 0;
 }

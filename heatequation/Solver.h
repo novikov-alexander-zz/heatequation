@@ -21,6 +21,7 @@ public:
 
 	inline void tma_seq(double *dst, double gamma, double alpha, double beta, int s_size, double *f, int step)
 	{
+		alpha = -alpha;
 		double *p = new double[s_size], *q = new double[s_size];
 		double *y = dst;
 		p[0] = 0;
@@ -110,6 +111,7 @@ public:
 		for (int i = s_size - 2; i >= 0; --i){
 			x[i] = (y[i] - x[i + 1] * beta) / u[i];
 		}
+		
 		if (rank != 0)
 			MPI_Send(&x[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
 		delete[] u;
@@ -130,7 +132,7 @@ public:
 
 	inline void solve(Grid *src, Grid *dst, Grid *tmp){
 		double stepx = src->getXStep();
-		int maxi = src->x - 1, maxj = src->y - 1;
+		int maxi = src->x, maxj = src->y;
 		double *srcData = src->data, *dstData = dst->data, *tmpData = tmp->data;
 		double hh = stepx*stepx;
 		double *b = new double[maxi * maxj];
@@ -159,13 +161,32 @@ public:
 		}
 
 		for (int j = 0; j < maxj; j++){
-			tma(tmpData, 1.0 / hh, 1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi - 1, bb[j]);
+			tma(&tmpData[j*maxi], 1.0 / hh, 1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi, bb[j]);
 			MPI_Barrier(MPI_COMM_WORLD);
 		}
 
-		for (int i = 0; i < maxi; i++){
-			tma_seq(dstData, 1.0 / hh, 1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
+		
+		std::memset(b, 0, maxi*maxj);
+
+		for (int i = 0; i < maxi; ++i){
+			for (int j = 0; j < maxj; ++j){
+				b[i*maxj + j] = -srcData[i*maxj + j] / (tau / 2) - f(i, j) / 2;
+			}
 		}
+
+		for (int i = 0; i < maxi; ++i){
+				b[i] += getBounds(i, 0);
+		}
+
+		for (int i = 0; i < maxi; ++i){
+			//b[(maxj-1)*maxi + i] += getBounds(i, src->y - 1);
+		}
+		
+
+		for (int i = 0; i < maxi; i++){
+			tma_seq(&dstData[i], 1.0 / hh, 1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
+		}
+		dst->print(2);
 	}
 
 	Solver(double tau){
