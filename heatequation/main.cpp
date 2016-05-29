@@ -51,10 +51,10 @@ public:
 	}
 	*/
 
-	inline void tma_seq(double gamma, double alpha, double beta, int s_size, double *f, int step)
+	inline void tma_seq(double *dst, double gamma, double alpha, double beta, int s_size, double *f, int step)
 	{
 		double *p = new double[s_size], *q = new double[s_size];
-		double *y = new double[s_size];
+		double *y = dst;
 		p[0] = 0;
 		q[0] = f[0];
 		for (int i = 0; i<s_size-2; ++i)
@@ -62,12 +62,12 @@ public:
 			p[i + 1] = beta / (alpha - gamma * p[i]);
 			q[i + 1] = (gamma * q[i] + f[i*step]) / (alpha - gamma * p[i]);
 		}
-		y[s_size-1] = f[(s_size-1)*step];
+		y[(s_size - 1)*step] = f[(s_size - 1)*step];
 		for (int i = s_size - 2; i >= 0; --i)
-			y[i] = p[i] * y[i + 1] + q[i];
+			y[i*step] = p[i] * y[(i + 1)*step] + q[i];
 	}
 
-	inline void tma(double* dst, double gamma, double alpha, double beta, int s_size, double *b){
+	inline void tma(double* dst, double gamma, double alpha, double beta, int s_size, double *bá){
 		MPI_Status status;
 		double ty,tx;
 		double *u = new double[s_size];
@@ -76,7 +76,7 @@ public:
 		double *t = new double[s_size];
 		double *T = new double[s_size];
 		double *y = new double[s_size];
-		double *x = new double[s_size];
+		double *x = dst;
 		
 		if (rank == 0){
 			u[0] = alpha;
@@ -149,7 +149,6 @@ public:
 		delete[] S;
 		delete[] t;
 		delete[] T;
-		delete[] x;
 		delete[] y;
 	}
 
