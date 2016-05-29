@@ -1,1 +1,5 @@
 *.opensdf
+prebuilt-dll-2-9-1-release/
+heatequation.sdf
+heatequation/Debug/
+heatequation/heatequation.vcxproj.filters
