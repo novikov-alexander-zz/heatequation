@@ -37,7 +37,6 @@ public:
 class Solver{
 public:
 	double tau;
-
 /*	inline int solve(Grid *src, Grid *dst){
 		double step = src->getStep();
 		int maxi = src->x - 1, maxj = src->y - 1;
@@ -51,6 +50,7 @@ public:
 		return 0;
 	}
 	*/
+
 	inline void tma_seq(double gamma, double alpha, double beta, int s_size, double *f, int step)
 	{
 		double *p = new double[s_size], *q = new double[s_size];
@@ -62,12 +62,12 @@ public:
 			p[i + 1] = beta / (alpha - gamma * p[i]);
 			q[i + 1] = (gamma * q[i] + f[i*step]) / (alpha - gamma * p[i]);
 		}
-		y[s_size-1] = f[s_size-1];
+		y[s_size-1] = f[(s_size-1)*step];
 		for (int i = s_size - 2; i >= 0; --i)
 			y[i] = p[i] * y[i + 1] + q[i];
 	}
 
-	inline void tma(double gamma, double alpha, double beta, int s_size, double *b){
+	inline void tma(double* dst, double gamma, double alpha, double beta, int s_size, double *b){
 		MPI_Status status;
 		double ty,tx;
 		double *u = new double[s_size];
@@ -157,10 +157,14 @@ public:
 		return 0;
 	}
 
-	inline void solve(Grid *src, Grid *dst){
+	inline double getBounds(int i, int j){
+		return 10;
+	}
+
+	inline void solve(Grid *src, Grid *dst, Grid *tmp){
 		double stepx = src->getXStep();
 		int maxi = src->x - 1, maxj = src->y - 1;
-		double *srcData = src->data, *dstData = dst->data;
+		double *srcData = src->data, *dstData = dst->data, *tmpData = tmp->data;
 		double hh = stepx*stepx;
 		double *b = new double[maxi * maxj];
 		double **bb = new double*[maxj];
@@ -172,17 +176,29 @@ public:
 		}
 		for (int i = 0; i < maxi; ++i){
 			for (int j = 0; j < maxj; ++j){
-				b[i] = -srcData[i*maxi + j] / (tau / 2) - f(i, j) / 2;
+				b[i] = -srcData[i*maxj + j] / (tau / 2) - f(i, j) / 2;
 			}
 		}
 		
-		for (int j = 1; j < maxj - 1; j++){
-			tma(1.0 / hh, 1.0 / (tau/2) - 2.0 / hh, 1.0 / hh, maxi - 1, bb[j]);
+		if (rank == 0){
+			for (int i = 0; i < maxi; ++i){
+				b[i] -= getBounds(0, 1 + i) / hh;
+			}
+		}
+
+		if (rank == size - 1){
+			for (int i = 0; i < maxi; ++i){
+				b[i + maxj - 1] -= getBounds(src->x - 1, 1 + i) / hh;
+			}
+		}
+
+		for (int j = 0; j < maxj; j++){
+			tma(tmpData, 1.0 / hh, 1.0 / (tau/2) - 2.0 / hh, 1.0 / hh, maxi - 1, bb[j]);
 			MPI_Barrier(MPI_COMM_WORLD);
 		}
 
-		for (int i = 1; i < maxi - 1; i++){
-			tma_seq(1.0 / hh, 1.0 / (tau/2) - 2.0 / hh, 1.0 / hh, maxj - 2, b, maxi - 2);
+		for (int i = 0; i < maxi; i++){
+			tma_seq(1.0 / hh, 1.0 / (tau/2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
 		}
 	}
 	
@@ -205,10 +221,11 @@ int main(int argc, char *argv[]){
 
 	
 	Grid *myGrid = new Grid(x, y, h, w);
+	Grid *tempGrid = new Grid(x, y, h, w);
 	Grid *nextOne = new Grid(x, y, h, w);
 
 	Solver solver(0.5);
-	solver.solve(myGrid, nextOne);
+	solver.solve(myGrid, nextOne, tempGrid);
 	MPI_Finalize();
 	return 0;
 }
