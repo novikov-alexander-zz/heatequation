@@ -38,7 +38,7 @@ public:
 
 	inline void tma(double* dst, double gamma, double alpha, double beta, int s_size, double *b){
 		MPI_Status status;
-		double ty, tx;
+		double ty, tx, tl;
 		double *u = new double[s_size];
 		double *l = new double[s_size];
 		double *S = new double[s_size];
@@ -86,14 +86,15 @@ public:
 			for (int i = 0; i < s_size; i++){
 				u[i] = S[i] + u[i] / (tu + t[i]);
 			}
-			if (rank < size - 1){
-				MPI_Send(&u[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
-			}
 			for (int i = 0; i < s_size; i++){
 				l[i] = gamma / u[i];
 			}
+			if (rank < size - 1){
+				MPI_Send(&u[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
+			}
 			MPI_Recv(&ty, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
-			y[0] = b[0] - l[0] * ty;
+			MPI_Recv(&tl, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
+			y[0] = b[0] - tl * ty;
 		}
 
 		for (int i = 0; i < s_size - 1; i++){
@@ -102,6 +103,7 @@ public:
 
 		if (rank < size - 1){
 			MPI_Send(&y[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
+			MPI_Send(&l[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
 			MPI_Recv(&tx, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &status);
 			x[s_size - 1] = (y[s_size - 1] - tx * beta) / u[s_size - 1];
 		}
