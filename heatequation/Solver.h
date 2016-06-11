@@ -64,8 +64,8 @@ public:
 				u[i] = S[i] + u[i] / (u[0] + t[i - 1]);
 			}
 			MPI_Send(&u[s_size - 1], 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD);
-			for (int i = 1; i < s_size; i++){
-				l[i] = gamma / u[i];
+			for (int i = 0; i < s_size; i++){
+				l[i] = gamma / u[i]; //до сюда все верно
 			}
 			y[0] = b[0];
 		}
@@ -97,7 +97,7 @@ public:
 		}
 
 		for (int i = 0; i < s_size - 1; i++){
-			y[i + 1] = b[i + 1] - l[i + 1] * y[i];
+			y[i + 1] = b[i + 1] - l[i] * y[i];
 		}
 
 		if (rank < size - 1){
@@ -170,7 +170,7 @@ public:
 
 		for (int i = 0; i < maxi; ++i){
 			for (int j = 0; j < maxj; ++j){
-				b[i*maxj + j] = -srcData[i*maxj + j] / (tau / 2) - f(i, j) / 2;
+				b[i*maxj + j] = -tmpData[i*maxj + j] / (tau / 2) - f(i, j) / 2;
 			}
 		}
 
@@ -179,14 +179,14 @@ public:
 		}
 
 		for (int i = 0; i < maxi; ++i){
-			//b[(maxj-1)*maxi + i] += getBounds(i, src->y - 1);
+			b[(maxj-1)*maxi + i] += getBounds(i, src->y - 1);
 		}
 		
 
 		for (int i = 0; i < maxi; i++){
 			tma_seq(&dstData[i], 1.0 / hh, 1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
 		}
-		dst->print(2);
+		//dst->print(2);
 	}
 
 	Solver(double tau){

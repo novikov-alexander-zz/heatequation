@@ -48,10 +48,11 @@ public:
 			}
 		}
 	}
+
 	void print(int proc){
 		if (proc == rank) {
-			for (int y = 0; y < this->y; ++y){
-				for (int x = 0; x < 1; ++x){
+			for (int y = this->y-1; y < this->y; ++y){
+				for (int x = 0; x < this->x; ++x){
 					std::cout << data[y * this->x + x] << " ";
 				}
 				std::cout << std::endl << std::endl << std::endl;

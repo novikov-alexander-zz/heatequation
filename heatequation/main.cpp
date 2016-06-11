@@ -27,9 +27,10 @@ int main(int argc, char *argv[]){
 	tempGrid->clear();
 	nextOne->clear();
 
-	Solver solver(10);
+	Solver solver(1000);
 	solver.solve(myGrid, nextOne, tempGrid);
-	//tempGrid->print();
+	tempGrid->print(0);
+	tempGrid->print(1);
 	MPI_Finalize();
 	return 0;
 }
