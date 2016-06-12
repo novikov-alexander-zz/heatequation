@@ -41,7 +41,8 @@ public:
 
 	inline void tma(double* dst, double gamma, double alpha, double beta, int s_size, double *b){
 		MPI_Status status;
-		double ty, tx, tl;
+		MPI_Request request;
+		double tly, tx;
 		double *u = new double[s_size];
 		double *l = new double[s_size];
 		double *S = new double[s_size];
@@ -66,7 +67,7 @@ public:
 			for (int i = 1; i < s_size; i++){
 				u[i] = S[i] + u[i] / (u[0] + t[i - 1]);
 			}
-			MPI_Send(&u[s_size - 1], 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD);
+			MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD, &request);
 			for (int i = 0; i < s_size; i++){
 				l[i] = gamma / u[i];
 			}
@@ -74,6 +75,7 @@ public:
 		}
 		else {
 			double tu;
+			MPI_Irecv(&tu, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &request);
 			t[0] = 0;
 			S[0] = alpha;
 			T[0] = -beta*gamma;
@@ -84,8 +86,7 @@ public:
 				u[i] = T[i] - S[i] * t[i];
 			}
 			u[0] = T[0];
-
-			MPI_Recv(&tu, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
+			MPI_Wait(&request, &status);
 			for (int i = 0; i < s_size; i++){
 				u[i] = S[i] + u[i] / (tu + t[i]);
 			}
@@ -93,11 +94,10 @@ public:
 				l[i] = gamma / u[i];
 			}
 			if (rank < size - 1){
-				MPI_Send(&u[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
+				MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &request);
 			}
-			MPI_Recv(&ty, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
-			MPI_Recv(&tl, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
-			y[0] = b[0] - tl * ty;
+			MPI_Irecv(&tly, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &request);
+			y[0] = b[0] - tly;
 		}
 
 		for (int i = 0; i < s_size - 1; i++){
@@ -105,8 +105,8 @@ public:
 		}
 
 		if (rank < size - 1){
-			MPI_Send(&y[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
-			MPI_Send(&l[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
+			double tly = y[s_size - 1] * l[s_size - 1];
+			MPI_Send(&tly, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
 			MPI_Recv(&tx, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &status);
 			x[s_size - 1] = (y[s_size - 1] - tx * beta) / u[s_size - 1];
 		}
@@ -118,13 +118,14 @@ public:
 		}
 		
 		if (rank != 0)
-			MPI_Send(&x[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
+			MPI_Isend(&x[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &request);
 		delete[] u;
 		delete[] l;
 		delete[] S;
 		delete[] t;
 		delete[] T;
 		delete[] y;
+		MPI_Wait(&request, &status);
 	}
 
 	inline double f(int i, int j){
