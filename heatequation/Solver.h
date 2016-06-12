@@ -1,4 +1,5 @@
 #include "mpi.h"
+#include <omp.h>
 
 extern int rank, size;
 
@@ -28,7 +29,6 @@ public:
 		double *y = dst;
 		double kap0 = beta/alpha, kap1 = gamma / alpha;
 		double mu0 = -f[0] / alpha, mu1 = -f[(s_size - 1)*step] / alpha;
-		std::cout << mu0 << " " << mu1 << std::endl;
 		p[0] = kap0;
 		q[0] = mu0;
 		for (int i = 0; i<s_size - 2; ++i)
@@ -178,10 +178,12 @@ public:
 
 		tma_prepare(1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi);
 		for (int j = 0; j < maxj; j++){
+			//tma_seq(&tmpData[j*maxi], 1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi, bb[j], 1);
 			tma(&tmpData[j*maxi], maxi, bb[j]);
 			MPI_Barrier(MPI_COMM_WORLD);
 		}
 
+		#pragma omp parallel for
 		for (int i = 0; i < maxi; ++i){
 			for (int j = 0; j < maxj; ++j){
 				b[j*maxi + i] = -tmpData[j*maxi + i] / (tau / 2) + f(i, j) / 2;
@@ -197,11 +199,10 @@ public:
 		}
 		
 
-
+		#pragma omp parallel for
 		for (int i = 0; i < maxi; i++){
 			tma_seq(&dstData[i], 1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
 		}
-		//dst->print(2);
 	}
 
 	Solver(double tau){
