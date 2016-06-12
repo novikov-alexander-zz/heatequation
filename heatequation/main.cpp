@@ -12,8 +12,8 @@ int main(int argc, char *argv[]){
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-	int x = 1000, y = 1000;
-	double h = 1, w = 1;
+	int x = 10, y = 10;
+	double h = 100, w = 100;
 	
 	x = x - 2;
 	y = y - 2;
@@ -27,10 +27,9 @@ int main(int argc, char *argv[]){
 	tempGrid->clear();
 	nextOne->clear();
 
-	Solver solver(1000);
+	Solver solver(10);
 	solver.solve(myGrid, nextOne, tempGrid);
-	tempGrid->print(0);
-	tempGrid->print(1);
+	nextOne->print(0);
 	MPI_Finalize();
 	return 0;
 }

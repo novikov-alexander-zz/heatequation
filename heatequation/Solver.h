@@ -21,17 +21,20 @@ public:
 
 	inline void tma_seq(double *dst, double gamma, double alpha, double beta, int s_size, double *f, int step)
 	{
-		alpha = -alpha;
+		alpha = -alpha;///!!! чтобы соответствовать Самарскому Гулину
 		double *p = new double[s_size], *q = new double[s_size];
 		double *y = dst;
-		p[0] = 0;
-		q[0] = f[0];
+		double kap0 = beta/alpha, kap1 = gamma / alpha;
+		double mu0 = -f[0] / alpha, mu1 = -f[(s_size - 1)*step] / alpha;
+		std::cout << mu0 << " " << mu1 << std::endl;
+		p[0] = kap0;
+		q[0] = mu0;
 		for (int i = 0; i<s_size - 2; ++i)
 		{
 			p[i + 1] = beta / (alpha - gamma * p[i]);
-			q[i + 1] = (gamma * q[i] + f[i*step]) / (alpha - gamma * p[i]);
+			q[i + 1] = (gamma * q[i] + f[(i+1)*step]) / (alpha - gamma * p[i]);//здесь может быть ошибка с f
 		}
-		y[(s_size - 1)*step] = f[(s_size - 1)*step];
+		y[(s_size - 1)*step] = (mu1 + kap1*q[s_size - 2]) / (1 - p[s_size - 2] * kap1);
 		for (int i = s_size - 2; i >= 0; --i)
 			y[i*step] = p[i] * y[(i + 1)*step] + q[i];
 	}
@@ -65,7 +68,7 @@ public:
 			}
 			MPI_Send(&u[s_size - 1], 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD);
 			for (int i = 0; i < s_size; i++){
-				l[i] = gamma / u[i]; //до сюда все верно
+				l[i] = gamma / u[i];
 			}
 			y[0] = b[0];
 		}
@@ -125,7 +128,7 @@ public:
 	}
 
 	inline double f(int i, int j){
-		return 0;
+		return 0; (-((double)j - 3.5)*((double)j - 3.5) + 9) / 1000;
 	}
 
 	inline double getBounds(int i, int j){
@@ -146,7 +149,7 @@ public:
 		}
 		for (int i = 0; i < maxi; ++i){
 			for (int j = 0; j < maxj; ++j){
-				b[i*maxj + j] = -srcData[i*maxj + j] / (tau / 2) - f(i, j) / 2;
+				b[j*maxi + i] = -srcData[j*maxi + i] / (tau / 2) - f(i, j) / 2;
 			}
 		}
 
@@ -163,7 +166,7 @@ public:
 		}
 
 		for (int j = 0; j < maxj; j++){
-			tma(&tmpData[j*maxi], 1.0 / hh, 1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi, bb[j]);
+			//tma(&tmpData[j*maxi], 1.0 / hh, 1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi, bb[j]);
 			MPI_Barrier(MPI_COMM_WORLD);
 		}
 
@@ -172,21 +175,22 @@ public:
 
 		for (int i = 0; i < maxi; ++i){
 			for (int j = 0; j < maxj; ++j){
-				b[i*maxj + j] = -tmpData[i*maxj + j] / (tau / 2) - f(i, j) / 2;
+				b[j*maxi + i] = -tmpData[j*maxi + i] / (tau / 2) + f(i, j) / 2;
 			}
 		}
 
 		for (int i = 0; i < maxi; ++i){
-				b[i] += getBounds(i, 0);
+			b[i] -= getBounds(i, 0) / hh;
 		}
 
 		for (int i = 0; i < maxi; ++i){
-			b[(maxj-1)*maxi + i] += getBounds(i, src->y - 1);
+			b[(maxj - 1)*maxi + i] -=  getBounds(i, src->y - 1) / hh;
 		}
 		
 
+
 		for (int i = 0; i < maxi; i++){
-			tma_seq(&dstData[i], 1.0 / hh, 1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
+			tma_seq(&dstData[i], 1.0 / hh, /*1.0 / (tau / 2)*/ - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
 		}
 		//dst->print(2);
 	}
