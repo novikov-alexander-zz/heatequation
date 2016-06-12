@@ -160,7 +160,7 @@ public:
 		}
 		for (int i = 0; i < maxi; ++i){
 			for (int j = 0; j < maxj; ++j){
-				b[j*maxi + i] = srcData[j*maxi + i] / (tau / 2) + f(i, j) / 2;
+				b[j*maxi + i] = -srcData[j*maxi + i] / (tau / 2) + f(i, j) / 2;
 			}
 		}
 
