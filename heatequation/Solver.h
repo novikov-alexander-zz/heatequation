@@ -128,7 +128,7 @@ public:
 	}
 
 	inline double f(int i, int j){
-		return 0; (-((double)j - 3.5)*((double)j - 3.5) + 9) / 1000;
+		return  0; (-((double)j - 3.5)*((double)j - 3.5) + 9) / 1000;
 	}
 
 	inline double getBounds(int i, int j){
@@ -166,7 +166,7 @@ public:
 		}
 
 		for (int j = 0; j < maxj; j++){
-			//tma(&tmpData[j*maxi], 1.0 / hh, 1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi, bb[j]);
+			//tma(&tmpData[j*maxi], 1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi, bb[j]);
 			MPI_Barrier(MPI_COMM_WORLD);
 		}
 
@@ -190,7 +190,7 @@ public:
 
 
 		for (int i = 0; i < maxi; i++){
-			tma_seq(&dstData[i], 1.0 / hh, /*1.0 / (tau / 2)*/ - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
+			tma_seq(&dstData[i], 1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
 		}
 		//dst->print(2);
 	}
