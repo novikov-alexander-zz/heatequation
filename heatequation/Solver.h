@@ -5,6 +5,8 @@ extern int rank, size;
 class Solver{
 public:
 	double tau;
+	double *u = NULL, *l = NULL;
+	double beta;
 	/*	inline int solve(Grid *src, Grid *dst){
 	double step = src->getStep();
 	int maxi = src->x - 1, maxj = src->y - 1;
@@ -18,7 +20,7 @@ public:
 	return 0;
 	}
 	*/
-
+	//тут f понимается в обычном смысле без минуса.
 	inline void tma_seq(double *dst, double gamma, double alpha, double beta, int s_size, double *f, int step)
 	{
 		alpha = -alpha;///!!! чтобы соответствовать Самарскому Гулину
@@ -32,25 +34,26 @@ public:
 		for (int i = 0; i<s_size - 2; ++i)
 		{
 			p[i + 1] = beta / (alpha - gamma * p[i]);
-			q[i + 1] = (gamma * q[i] + f[(i+1)*step]) / (alpha - gamma * p[i]);//здесь может быть ошибка с f
+			q[i + 1] = (gamma * q[i] - f[(i+1)*step]) / (alpha - gamma * p[i]);//минус перед f потому что в самарском гулине знаки наоборот!
 		}
 		y[(s_size - 1)*step] = (mu1 + kap1*q[s_size - 2]) / (1 - p[s_size - 2] * kap1);
 		for (int i = s_size - 2; i >= 0; --i)
 			y[i*step] = p[i] * y[(i + 1)*step] + q[i];
 	}
 
-	inline void tma(double* dst, double gamma, double alpha, double beta, int s_size, double *b){
+	inline void tma_prepare(double gamma, double alpha, double beta, int s_size){
 		MPI_Status status;
 		MPI_Request request;
-		double tly, tx;
-		double *u = new double[s_size];
-		double *l = new double[s_size];
+		if (u)
+			delete[] u;
+		u = new double[s_size];
+		if (l)
+			delete[] l;
+		l = new double[s_size];
+		this->beta = beta;
 		double *S = new double[s_size];
 		double *t = new double[s_size];
 		double *T = new double[s_size];
-		double *y = new double[s_size];
-		double *x = dst;
-
 		if (rank == 0){
 			u[0] = alpha;
 			t[0] = 0;
@@ -71,7 +74,6 @@ public:
 			for (int i = 0; i < s_size; i++){
 				l[i] = gamma / u[i];
 			}
-			y[0] = b[0];
 		}
 		else {
 			double tu;
@@ -90,13 +92,27 @@ public:
 			for (int i = 0; i < s_size; i++){
 				u[i] = S[i] + u[i] / (tu + t[i]);
 			}
-			for (int i = 0; i < s_size; i++){
-				l[i] = gamma / u[i];
-			}
 			if (rank < size - 1){
 				MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &request);
 			}
-			MPI_Irecv(&tly, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &request);
+			for (int i = 0; i < s_size; i++){
+				l[i] = gamma / u[i];
+			}
+		}
+	}
+
+	inline void tma(double* dst, int s_size, double *b){
+		MPI_Status status;
+		MPI_Request request;
+		double tly, tx;
+		double *y = new double[s_size];
+		double *x = dst;
+
+		if (rank == 0){
+			y[0] = b[0];
+		} else {
+			double tu;
+			MPI_Recv(&tly, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
 			y[0] = b[0] - tly;
 		}
 
@@ -118,14 +134,8 @@ public:
 		}
 		
 		if (rank != 0)
-			MPI_Isend(&x[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &request);
-		delete[] u;
-		delete[] l;
-		delete[] S;
-		delete[] t;
-		delete[] T;
+			MPI_Send(&x[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
 		delete[] y;
-		MPI_Wait(&request, &status);
 	}
 
 	inline double f(int i, int j){
@@ -150,7 +160,7 @@ public:
 		}
 		for (int i = 0; i < maxi; ++i){
 			for (int j = 0; j < maxj; ++j){
-				b[j*maxi + i] = -srcData[j*maxi + i] / (tau / 2) - f(i, j) / 2;
+				b[j*maxi + i] = srcData[j*maxi + i] / (tau / 2) + f(i, j) / 2;
 			}
 		}
 
@@ -166,13 +176,11 @@ public:
 			}
 		}
 
+		tma_prepare(1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi);
 		for (int j = 0; j < maxj; j++){
-			//tma(&tmpData[j*maxi], 1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi, bb[j]);
+			tma(&tmpData[j*maxi], maxi, bb[j]);
 			MPI_Barrier(MPI_COMM_WORLD);
 		}
-
-		
-		std::memset(b, 0, maxi*maxj);
 
 		for (int i = 0; i < maxi; ++i){
 			for (int j = 0; j < maxj; ++j){
