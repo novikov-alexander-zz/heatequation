@@ -167,8 +167,6 @@ public:
 			x[s_size - 1] = y[s_size - 1] / u[s_size - 1];
 		}
 
-		std::cout << x[s_size - 1] << "fuck!" << std::endl << std::endl;
-
 		y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
 		um[s_size - 1] = -beta / u[s_size - 1];
 		for (int i = s_size - 2; i >= 0; --i){
@@ -211,6 +209,8 @@ public:
 		tma_prepare(1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi);
 
 		for (int it = 0; it < iters; ++it){
+
+#pragma omp parallel for	
 			for (int i = 0; i < maxi; ++i){
 				for (int j = 0; j < maxj; ++j){
 					b[j*maxi + i] = -srcData[j*maxi + i] / (tau / 2) + f(i, j) / 2;
@@ -218,12 +218,14 @@ public:
 			}
 
 			if (rank == 0){
+#pragma omp parallel for	
 				for (int j = 0; j < maxj; ++j){
 					b[j*maxi] -= getBounds(0, j) / hh;
 				}
 			}
 
 			if (rank == size - 1){
+#pragma omp parallel for	
 				for (int j = 0; j < maxj; ++j){
 					b[j*maxi + maxi - 1] -= getBounds(src->x - 1, j) / hh;
 				}
@@ -240,13 +242,7 @@ public:
 				for (int j = 0; j < maxj; ++j){
 					b[j*maxi + i] = -tmpData[j*maxi + i] / (tau / 2) + f(i, j) / 2;
 				}
-			}
-
-			for (int i = 0; i < maxi; ++i){
 				b[i] -= getBounds(i, 0) / hh;
-			}
-
-			for (int i = 0; i < maxi; ++i){
 				b[(maxj - 1)*maxi + i] -= getBounds(i, src->y - 1) / hh;
 			}
 
