@@ -244,11 +244,7 @@ public:
 				}
 				b[i] -= getBounds(i, 0) / hh;
 				b[(maxj - 1)*maxi + i] -= getBounds(i, src->y - 1) / hh;
-			}
 
-
-#pragma omp parallel for	
-			for (int i = 0; i < maxi; i++){
 				tma_seq(&dstData[i], 1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
 			}
 			Grid* t = dst;
