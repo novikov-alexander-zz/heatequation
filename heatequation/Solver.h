@@ -115,7 +115,7 @@ public:
 		MPI_Status status;
 		MPI_Request request;
 		double tly, tx;
-
+		int proc = omp_get_thread_num();
 		double *um = new double[s_size];
 		double *y = new double[s_size];
 		double *x = dst;
@@ -124,7 +124,7 @@ public:
 			y[0] = b[0];
 		}
 		else {
-			MPI_Recv(&tly, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
+			MPI_Recv(&tly, 1, MPI_DOUBLE, rank - 1, proc, MPI_COMM_WORLD, &status);
 			y[0] = b[0] - tly;
 		}
 		/*
@@ -159,8 +159,8 @@ public:
 
 		if (rank < size - 1){
 			double tly = y[s_size - 1] * l[s_size - 1];
-			MPI_Send(&tly, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
-			MPI_Recv(&tx, 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &status);
+			MPI_Send(&tly, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD);
+			MPI_Recv(&tx, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &status);
 			x[s_size - 1] = (y[s_size - 1] - tx * beta) / u[s_size - 1];
 		}
 		else {
@@ -181,7 +181,7 @@ public:
 
 
 		if (rank != 0)
-			MPI_Send(&x[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
+			MPI_Send(&x[0], 1, MPI_DOUBLE, rank - 1, proc, MPI_COMM_WORLD);
 		delete[] y;
 		delete[] um;
 	}
@@ -231,10 +231,10 @@ public:
 				}
 			}
 
+#pragma omp parallel for
 			for (int j = 0; j < maxj; j++){
 				//tma_seq(&tmpData[j*maxi], 1.0 / hh, -1.0 / (tau / 2) 	- 2.0 / hh, 1.0 / hh, maxi, bb[j], 1);
 				tma(&tmpData[j*maxi], maxi, bb[j]);
-				MPI_Barrier(MPI_COMM_WORLD);
 			}
 
 #pragma omp parallel for	
