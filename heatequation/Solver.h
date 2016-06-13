@@ -162,18 +162,9 @@ public:
 		else {
 			x[s_size - 1] = y[s_size - 1] / u[s_size - 1];
 		}
-		std::cout << x[s_size - 1] << "fuck!" << u[s_size - 1] << std::endl << std::endl;
-
-		y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
-		u[s_size - 1] = -beta / u[s_size - 1];
+		std::cout << "fuck! " << x[s_size - 1] << std::endl;
 		for (int i = s_size - 2; i >= 0; --i){
-			y[i] = (-beta*y[i + 1] + y[i]) / u[i];
-			u[i] = -beta*u[i + 1] / u[i];
-		}
-
-#pragma omp parallel for 
-		for (int i = s_size - 2; i >= 0; --i){
-			x[i] = y[i] + u[i]*x[s_size-1];
+			x[i] = (y[i] - x[i + 1] * beta) / u[i];
 		}
 
 		if (rank != 0)

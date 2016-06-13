@@ -31,9 +31,10 @@ int main(int argc, char *argv[]){
 	nextOne->clear();
 
 	Solver solver(0.1);
-	solver.solve(myGrid, nextOne, tempGrid, 100);
+	solver.solve(myGrid, nextOne, tempGrid, 1);
 
 	endtime = MPI_Wtime();
+	myGrid->print(2);
 	std::cout << "My time is: " << endtime - starttime << std::endl;
 	MPI_Finalize();
 	return 0;
