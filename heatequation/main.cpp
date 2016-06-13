@@ -12,13 +12,16 @@ int main(int argc, char *argv[]){
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+	double starttime, endtime;
+	starttime = MPI_Wtime();
+
 	int x = 10, y = 10;
 	double h = 100, w = 100;
-	
+
 	x = x - 2;
 	y = y - 2;
 
-	
+
 	Grid *myGrid = new Grid(x, y, h, w);
 	Grid *tempGrid = new Grid(x, y, h, w);
 	Grid *nextOne = new Grid(x, y, h, w);
@@ -27,9 +30,11 @@ int main(int argc, char *argv[]){
 	tempGrid->clear();
 	nextOne->clear();
 
-	Solver solver(0.10000);
-	solver.solve(myGrid, nextOne, tempGrid);
-	nextOne->print(0);
+	Solver solver(0.1);
+	solver.solve(myGrid, nextOne, tempGrid, 100);
+
+	endtime = MPI_Wtime();
+	std::cout << "My time is: " << endtime - starttime << std::endl;
 	MPI_Finalize();
 	return 0;
 }

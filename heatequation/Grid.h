@@ -1,3 +1,5 @@
+#include <cstring>
+
 extern int rank, size;
 
 class Grid {
