@@ -102,6 +102,10 @@ public:
 				l[i] = gamma / u[i];
 			}
 		}
+		for (int i = 1; i < s_size - 1; i++){
+			l[i] = -l[i - 1] * l[i];
+		}
+		l[s_size - 1] = -l[s_size - 2] * l[s_size - 1];
 		delete[] S;
 		delete[] t;
 		delete[] T;
@@ -111,6 +115,8 @@ public:
 		MPI_Status status;
 		MPI_Request request;
 		double tly, tx;
+
+		double *um = new double[s_size];
 		double *y = new double[s_size];
 		double *x = dst;
 
@@ -143,11 +149,9 @@ public:
 	} 
 */
 		for (int i = 1; i < s_size - 1; i++){
-			l[i] = -l[i - 1] * l[i];
 			b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
 		}
-		l[s_size-1] = -l[s_size - 2] * l[s_size - 1];
-
+		
 #pragma omp parallel for
 		for (int i = 0; i < s_size - 1; i++){
 			y[i + 1] = b[i + 1] - l[i] * y[0];
@@ -162,14 +166,26 @@ public:
 		else {
 			x[s_size - 1] = y[s_size - 1] / u[s_size - 1];
 		}
-		std::cout << "fuck! " << x[s_size - 1] << std::endl;
+
+		std::cout << x[s_size - 1] << "fuck!" << std::endl << std::endl;
+
+		y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
+		um[s_size - 1] = -beta / u[s_size - 1];
 		for (int i = s_size - 2; i >= 0; --i){
-			x[i] = (y[i] - x[i + 1] * beta) / u[i];
+			y[i] = (-beta*y[i + 1] + y[i]) / u[i];
+			um[i] = -beta*u[i + 1] / um[i];
 		}
+		
+#pragma omp parallel for 
+		for (int i = s_size - 2; i >= 0; --i){
+			x[i] = y[i] + um[i] * x[s_size - 1];
+		}
+
 
 		if (rank != 0)
 			MPI_Send(&x[0], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
 		delete[] y;
+		delete[] um;
 	}
 
 	inline double f(int i, int j){
