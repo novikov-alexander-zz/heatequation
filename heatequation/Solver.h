@@ -121,9 +121,36 @@ public:
 			MPI_Recv(&tly, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &status);
 			y[0] = b[0] - tly;
 		}
+		/*
+#pragma omp parallel{
+		int threads = omp_get_num_threads();
+		int thread = omp_get_thread_num();
+		int portion = s_size / threads;
+		int thresh = portion*(thread + 1) > s_size ? portion*(thread + 1) : s_size;
+		int i = portion*thread;
+		if (i == 0)
+			i++;
+		for (; i < thresh; ++i){
+			l[i] = -l[i - 1] * l[i];
+			b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+		}
+		int step = portion;
+		portion /= 2;
+		for (int i = portion*thread + 1; i < thresh; ++i){
+			l[i] = -l[i - 1] * l[i];
+			b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+		}
+	} 
+*/
+		for (int i = 1; i < s_size - 1; i++){
+			l[i] = -l[i - 1] * l[i];
+			b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+		}
+		l[s_size-1] = -l[s_size - 2] * l[s_size - 1];
 
+#pragma omp parallel for
 		for (int i = 0; i < s_size - 1; i++){
-			y[i + 1] = b[i + 1] - l[i] * y[i];
+			y[i + 1] = b[i + 1] - l[i] * y[0];
 		}
 
 		if (rank < size - 1){
@@ -135,8 +162,18 @@ public:
 		else {
 			x[s_size - 1] = y[s_size - 1] / u[s_size - 1];
 		}
+		std::cout << x[s_size - 1] << "fuck!" << u[s_size - 1] << std::endl << std::endl;
+
+		y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
+		u[s_size - 1] = -beta / u[s_size - 1];
 		for (int i = s_size - 2; i >= 0; --i){
-			x[i] = (y[i] - x[i + 1] * beta) / u[i];
+			y[i] = (-beta*y[i + 1] + y[i]) / u[i];
+			u[i] = -beta*u[i + 1] / u[i];
+		}
+
+#pragma omp parallel for 
+		for (int i = s_size - 2; i >= 0; --i){
+			x[i] = y[i] + u[i]*x[s_size-1];
 		}
 
 		if (rank != 0)
