@@ -70,13 +70,15 @@ public:
 				u[i] = T[i] - S[i] * t[i - 1];
 			}
 			u[1] = T[1];
-			for (int i = 1; i < s_size; i++){
-				u[i] = S[i] + u[i] / (u[0] + t[i - 1]);
-			}
+			u[s_size - 1] = S[s_size - 1] + u[s_size-1] / (u[0] + t[s_size - 2]);
 			MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD, &request);
-			for (int i = 0; i < s_size; i++){
+#pragma omp parallel for
+			for (int i = 1; i < s_size - 1; i++){
+				u[i] = S[i] + u[i] / (u[0] + t[i - 1]);
 				l[i] = gamma / u[i];
 			}
+			l[0] = gamma / u[0];
+			l[s_size - 1] = gamma / u[s_size - 1];
 		}
 		else {
 			double tu;
@@ -92,7 +94,9 @@ public:
 			}
 			u[0] = T[0];
 			MPI_Wait(&request, &status);
-			for (int i = 0; i < s_size; i++){
+			u[s_size - 1] = S[s_size - 1] + u[s_size - 1] / (tu + t[s_size - 1]);
+#pragma omp parallel for
+			for (int i = 0; i < s_size - 1; i++){
 				u[i] = S[i] + u[i] / (tu + t[i]);
 			}
 			if (rank < size - 1){
