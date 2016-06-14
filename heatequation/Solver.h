@@ -95,16 +95,16 @@ public:
 			u[0] = T[0];
 			MPI_Wait(&request, &status);
 			u[s_size - 1] = S[s_size - 1] + u[s_size - 1] / (tu + t[s_size - 1]);
-#pragma omp parallel for
-			for (int i = 0; i < s_size - 1; i++){
-				u[i] = S[i] + u[i] / (tu + t[i]);
-			}
 			if (rank < size - 1){
 				MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &request);
 			}
-			for (int i = 0; i < s_size; i++){
+#pragma omp parallel for
+			for (int i = 0; i < s_size - 1; i++){
+				u[i] = S[i] + u[i] / (tu + t[i]);
 				l[i] = gamma / u[i];
 			}
+			l[0] = gamma / u[0];
+			l[s_size - 1] = gamma / u[s_size - 1];
 		}
 		for (int i = 1; i < s_size - 1; i++){
 			l[i] = -l[i - 1] * l[i];
@@ -175,7 +175,6 @@ public:
 		for (int i = s_size - 2; i >= 0; --i){
 			y[i] = (-beta*y[i + 1] + y[i]) / u[i];
 			um[i] = -beta*um[i + 1] / u[i];
-			std::cout << um[i] << std::endl;
 		}
 
 		if (rank < size - 1){
