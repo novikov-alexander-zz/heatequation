@@ -113,18 +113,26 @@ public:
 
 	inline void tma(double* dst, int s_size, double *b){
 		MPI_Status status;
-		MPI_Request request;
+		MPI_Request srequest, rrequest;
 		double tly, tx;
 		int proc = omp_get_thread_num();
 		double *um = new double[s_size];
 		double *y = new double[s_size];
 		double *x = dst;
 
+		if (rank != 0){
+			MPI_Irecv(&tly, 1, MPI_DOUBLE, rank - 1, proc, MPI_COMM_WORLD, &rrequest);
+		}
+
+		for (int i = 1; i < s_size - 1; i++){
+			b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+		}
+
 		if (rank == 0){
 			y[0] = b[0];
 		}
 		else {
-			MPI_Recv(&tly, 1, MPI_DOUBLE, rank - 1, proc, MPI_COMM_WORLD, &status);
+			MPI_Wait(&rrequest, &status);
 			y[0] = b[0] - tly;
 		}
 		/*
@@ -148,23 +156,17 @@ public:
 		}
 	} 
 */
-		for (int i = 1; i < s_size - 1; i++){
-			b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-		}
-		
-#pragma omp parallel for
-		for (int i = 0; i < s_size - 1; i++){
-			y[i + 1] = b[i + 1] - l[i] * y[0];
-		}
+		y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
 
 		if (rank < size - 1){
 			double tly = y[s_size - 1] * l[s_size - 1];
-			MPI_Send(&tly, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD);
-			MPI_Recv(&tx, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &status);
-			x[s_size - 1] = (y[s_size - 1] - tx * beta) / u[s_size - 1];
+			MPI_Isend(&tly, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &srequest);
+			MPI_Irecv(&tx, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &rrequest);
 		}
-		else {
-			x[s_size - 1] = y[s_size - 1] / u[s_size - 1];
+
+#pragma omp parallel for
+		for (int i = 0; i < s_size - 2; i++){
+			y[i + 1] = b[i + 1] - l[i] * y[0];
 		}
 
 		y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
@@ -173,7 +175,15 @@ public:
 			y[i] = (-beta*y[i + 1] + y[i]) / u[i];
 			um[i] = -beta*u[i + 1] / um[i];
 		}
-		
+
+		if (rank < size - 1){
+			MPI_Wait(&rrequest, &status);
+			x[s_size - 1] = y[s_size - 1] - tx * beta / u[s_size - 1];
+		}
+		else {
+			x[s_size - 1] = y[s_size - 1] / u[s_size - 1];
+		}
+
 #pragma omp parallel for 
 		for (int i = s_size - 2; i >= 0; --i){
 			x[i] = y[i] + um[i] * x[s_size - 1];
