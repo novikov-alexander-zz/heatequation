@@ -111,15 +111,13 @@ public:
 		delete[] T;
 	}
 
-	inline void tma(double* dst, int s_size, double *b){
+	inline void tma(double* dst, int s_size, double *b, double *um, double *y){
 		MPI_Status status;
 		MPI_Request srequest, rrequest;
 		double tly, tx;
 		int proc = omp_get_thread_num();
-		double *um = new double[s_size];
-		double *y = new double[s_size];
 		double *x = dst;
-
+		
 		if (rank != 0){
 			MPI_Irecv(&tly, 1, MPI_DOUBLE, rank - 1, proc, MPI_COMM_WORLD, &rrequest);
 		}
@@ -130,8 +128,7 @@ public:
 
 		if (rank == 0){
 			y[0] = b[0];
-		}
-		else {
+		} else {
 			MPI_Wait(&rrequest, &status);
 			y[0] = b[0] - tly;
 		}
@@ -173,7 +170,8 @@ public:
 		um[s_size - 1] = -beta / u[s_size - 1];
 		for (int i = s_size - 2; i >= 0; --i){
 			y[i] = (-beta*y[i + 1] + y[i]) / u[i];
-			um[i] = -beta*u[i + 1] / um[i];
+			um[i] = -beta*um[i + 1] / u[i];
+			std::cout << um[i] << std::endl;
 		}
 
 		if (rank < size - 1){
@@ -191,9 +189,7 @@ public:
 
 
 		if (rank != 0)
-			MPI_Send(&x[0], 1, MPI_DOUBLE, rank - 1, proc, MPI_COMM_WORLD);
-		delete[] y;
-		delete[] um;
+			MPI_Isend(&x[0], 1, MPI_DOUBLE, rank - 1, proc, MPI_COMM_WORLD, &srequest);
 	}
 
 	inline double f(int i, int j){
@@ -211,10 +207,24 @@ public:
 		double hh = stepx*stepx;
 		double *b = new double[maxi * maxj];
 		double **bb = new double*[maxj];
+		int threads = omp_get_max_threads();
 
-		for (int j = 0; j < maxj; j++){
-			bb[j] = &b[j*maxi];
+		static double *um, *y;
+
+#pragma omp threadprivate(um)
+#pragma omp threadprivate(y)
+
+#pragma omp parallel
+		{
+			um = new double[maxi];
+			y = new double[maxi];
+#pragma omp for
+			for (int j = 0; j < maxj; j++){
+				bb[j] = &b[j*maxi];
+			}
 		}
+
+		
 
 		tma_prepare(1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi);
 
@@ -242,10 +252,10 @@ public:
 			}
 
 #pragma omp parallel for
-			for (int j = 0; j < maxj; j++){
-				//tma_seq(&tmpData[j*maxi], 1.0 / hh, -1.0 / (tau / 2) 	- 2.0 / hh, 1.0 / hh, maxi, bb[j], 1);
-				tma(&tmpData[j*maxi], maxi, bb[j]);
-			}
+				for (int j = 0; j < maxj; j++){
+					//tma_seq(&tmpData[j*maxi], 1.0 / hh, -1.0 / (tau / 2) 	- 2.0 / hh, 1.0 / hh, maxi, bb[j], 1);
+					tma(&tmpData[j*maxi], maxi, bb[j], um, y);
+				}
 
 #pragma omp parallel for	
 			for (int i = 0; i < maxi; ++i){
