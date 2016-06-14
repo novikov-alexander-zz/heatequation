@@ -103,7 +103,6 @@ public:
 				u[i] = S[i] + u[i] / (tu + t[i]);
 				l[i] = gamma / u[i];
 			}
-			l[0] = gamma / u[0];
 			l[s_size - 1] = gamma / u[s_size - 1];
 		}
 		for (int i = 1; i < s_size - 1; i++){
@@ -175,6 +174,7 @@ public:
 		for (int i = s_size - 2; i >= 0; --i){
 			y[i] = (-beta*y[i + 1] + y[i]) / u[i];
 			um[i] = -beta*um[i + 1] / u[i];
+			std::cout << um[i] << std::endl;
 		}
 
 		if (rank < size - 1){
@@ -185,14 +185,14 @@ public:
 			x[s_size - 1] = y[s_size - 1] / u[s_size - 1];
 		}
 
-#pragma omp parallel for 
-		for (int i = s_size - 2; i >= 0; --i){
-			x[i] = y[i] + um[i] * x[s_size - 1];
-		}
-
-
+		x[0] = y[0] + um[0] * x[s_size - 1];
 		if (rank != 0)
 			MPI_Isend(&x[0], 1, MPI_DOUBLE, rank - 1, proc, MPI_COMM_WORLD, &srequest);
+
+#pragma omp parallel for 
+		for (int i = s_size - 2; i > 0; --i){
+			x[i] = y[i] + um[i] * x[s_size - 1];
+		}
 	}
 
 	inline double f(int i, int j){
