@@ -138,26 +138,28 @@ public:
 					MPI_Send(&stly, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
 				}
 			} else if (rank%(2*owners) < owners){//эти отправл€ют l
+				MPI_Isend(&l[s_size - 1], 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD, &srequest);
 				for (int i = 1; i < s_size - 1; i++){
 					b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
 				}
-				MPI_Send(&l[s_size - 1], 1, MPI_DOUBLE, rank+owners, proc, MPI_COMM_WORLD);
+				MPI_Wait(&srequest, &status);
 				MPI_Send(&b[s_size - 1], 1, MPI_DOUBLE, rank+owners, proc, MPI_COMM_WORLD);
 			}
 			else {//эти принимают
 				if (rank < owners * 2){//принимают y
+					MPI_Irecv(&tly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &rrequest);
+
 					for (int i = 1; i < s_size - 1; i++){
 						b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
 					}
-
-					MPI_Recv(&tly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &status);
-
+				
+					MPI_Wait(&rrequest, &status);
 					y[0] = b[0] - tly;
 					y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
 
 					if (owners * 2 < size){
 						stly = y[s_size - 1] * l[s_size - 1];
-						MPI_Send(&stly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
+						MPI_Isend(&stly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &srequest);//Danger!No wait!
 					}
 #pragma omp parallel for
 					for (int i = 0; i < s_size - 2; i++){
