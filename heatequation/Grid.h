@@ -20,8 +20,8 @@ public:
 	Grid(int x, int y, double height, double width){
 		this->height = height;
 		this->width = width;
-		this->xstep = height / x;
-		this->ystep = width / y;
+		this->xstep = height / (x+2);
+		this->ystep = width / (y+2);
 
 		int portionx = (x / (size + 1));
 		int i1x = (rank == 0) ? 0 : x - portionx * (size - rank);

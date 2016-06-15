@@ -117,51 +117,61 @@ public:
 	inline void tma(double* dst, int s_size, double *b, double *um, double *y){
 		MPI_Status status;
 		MPI_Request srequest, rrequest;
-		double tly, tx,stly;
+		double tly, tx,stly, rmul, ll, lb;
 		int proc = omp_get_thread_num();
 		double *x = dst;
 		
-		if (rank != 0){
-			MPI_Irecv(&tly, 1, MPI_DOUBLE, rank - 1, proc, MPI_COMM_WORLD, &rrequest);
-		}
-
-		for (int i = 1; i < s_size - 1; i++){
-			b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-		}
-
-		if (rank == 0){
+		switch (rank){
+		case 0:
+			for (int i = 1; i < s_size - 1; i++){
+				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+			}
 			y[0] = b[0];
-		} else {
-			MPI_Wait(&rrequest, &status);
-			y[0] = b[0] - tly;
-		}
-		/*
-#pragma omp parallel{
-		int threads = omp_get_num_threads();
-		int thread = omp_get_thread_num();
-		int portion = s_size / threads;
-		int thresh = portion*(thread + 1) > s_size ? portion*(thread + 1) : s_size;
-		int i = portion*thread;
-		if (i == 0)
-			i++;
-		for (; i < thresh; ++i){
-			l[i] = -l[i - 1] * l[i];
-			b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-		}
-		int step = portion;
-		portion /= 2;
-		for (int i = portion*thread + 1; i < thresh; ++i){
-			l[i] = -l[i - 1] * l[i];
-			b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-		}
-	} 
-*/
+			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
 
-		y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
+			stly = y[s_size - 1] * l[s_size - 1];
+			MPI_Send(&stly, 1, MPI_DOUBLE, 1, proc, MPI_COMM_WORLD);
+			MPI_Recv(&stly, 1, MPI_DOUBLE, 1, proc, MPI_COMM_WORLD, &status);
+			MPI_Send(&stly, 1, MPI_DOUBLE, 2, proc, MPI_COMM_WORLD);
+			break;
+		case 1:
+			MPI_Recv(&tly, 1, MPI_DOUBLE, 0, proc, MPI_COMM_WORLD, &status);
+			for (int i = 1; i < s_size - 1; i++){
+				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+			}
+			y[0] = b[0] - tly;
+			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
+
+			stly = y[s_size - 1] * l[s_size - 1];
+			MPI_Send(&stly, 1, MPI_DOUBLE, 0, proc, MPI_COMM_WORLD);
+			MPI_Send(&stly, 1, MPI_DOUBLE, 3, proc, MPI_COMM_WORLD);
+			break;
+		case 2:
+			for (int i = 1; i < s_size - 1; i++){
+				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+			}
+			MPI_Send(&l[s_size - 1], 1, MPI_DOUBLE, 3, proc, MPI_COMM_WORLD);
+			MPI_Send(&b[s_size - 1], 1, MPI_DOUBLE, 3, proc, MPI_COMM_WORLD);
+			MPI_Recv(&tly, 1, MPI_DOUBLE, 0, proc, MPI_COMM_WORLD, &status);
+			y[0] = b[0] - tly;
+			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
+			break;
+		case 3:
+			MPI_Recv(&ll, 1, MPI_DOUBLE, 2, proc, MPI_COMM_WORLD, &status);
+			MPI_Recv(&lb, 1, MPI_DOUBLE, 2, proc, MPI_COMM_WORLD, &status);
+			l[0] = -ll * l[0];
+			for (int i = 1; i < s_size; i++){
+				l[i] = -l[i - 1] * l[i];
+			}
+			for (int i = 1; i < s_size - 1; i++){
+				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+			}
+			MPI_Recv(&tly, 1, MPI_DOUBLE, 1, proc, MPI_COMM_WORLD, &status);
+			y[0] = b[0] - tly;
+			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
+		}
 
 		if (rank < size - 1){
-		    stly = y[s_size - 1] * l[s_size - 1];
-			MPI_Isend(&stly, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &srequest);
 			MPI_Irecv(&tx, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &rrequest);
 		}
 
@@ -204,10 +214,10 @@ public:
 	}
 
 	inline void solve(Grid *&src, Grid *&dst, Grid *tmp, int iters){
-		double stepx = src->getXStep();
+		double stepx = src->getXStep(), stepy = src->getYStep();
 		int maxi = src->x, maxj = src->y;
 		double *srcData = src->data, *dstData = dst->data, *tmpData = tmp->data;
-		double hh = stepx*stepx;
+		double xx = stepx*stepx, yy = stepy*stepy;
 		double *b = new double[maxi * maxj];
 		double **bb = new double*[maxj];
 		int threads = omp_get_max_threads();
@@ -229,7 +239,7 @@ public:
 
 		
 
-		tma_prepare(1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxi);
+		tma_prepare(1.0 / xx, -1.0 / (tau / 2) - 2.0 / xx, 1.0 / xx, maxi);
 
 		for (int it = 0; it < iters; ++it){
 
@@ -243,14 +253,14 @@ public:
 			if (rank == 0){
 #pragma omp parallel for	
 				for (int j = 0; j < maxj; ++j){
-					b[j*maxi] -= getBounds(0, j) / hh;
+					b[j*maxi] -= getBounds(0, j) / xx;
 				}
 			}
 
 			if (rank == size - 1){
 #pragma omp parallel for	
 				for (int j = 0; j < maxj; ++j){
-					b[j*maxi + maxi - 1] -= getBounds(src->x - 1, j) / hh;
+					b[j*maxi + maxi - 1] -= getBounds(src->x - 1, j) / xx;
 				}
 			}
 
@@ -265,10 +275,10 @@ public:
 				for (int j = 0; j < maxj; ++j){
 					b[j*maxi + i] = -tmpData[j*maxi + i] / (tau / 2) + f(i, j) / 2;
 				}
-				b[i] -= getBounds(i, 0) / hh;
-				b[(maxj - 1)*maxi + i] -= getBounds(i, src->y - 1) / hh;
+				b[i] -= getBounds(i, 0) / yy;
+				b[(maxj - 1)*maxi + i] -= getBounds(i, src->y - 1) / yy;
 
-				tma_seq(&dstData[i], 1.0 / hh, -1.0 / (tau / 2) - 2.0 / hh, 1.0 / hh, maxj, &b[i], maxi);
+				tma_seq(&dstData[i], 1.0 / yy, -1.0 / (tau / 2) - 2.0 / yy, 1.0 / yy, maxj, &b[i], maxi);
 			}
 			Grid* t = dst;
 			dst = src;

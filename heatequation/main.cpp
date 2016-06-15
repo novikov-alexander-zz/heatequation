@@ -19,7 +19,7 @@ int main(int argc, char *argv[]){
 	double starttime, endtime;
 	starttime = MPI_Wtime();
 
-	int x = 10, y = 10;
+	int x = 16, y = 10;
 	double h = 100, w = 100;
 
 	x = x - 2;
@@ -38,7 +38,10 @@ int main(int argc, char *argv[]){
 	solver.solve(myGrid, nextOne, tempGrid, 1);
 
 	endtime = MPI_Wtime();
+	MPI_Barrier(MPI_COMM_WORLD);
 	myGrid->print(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+	myGrid->print(size - 1);
 	std::cout << "My time is: " << endtime - starttime << std::endl;
 	MPI_Finalize();
 	return 0;
