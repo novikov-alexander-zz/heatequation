@@ -127,6 +127,13 @@ public:
 			}
 			y[0] = b[0];
 			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
+
+			stly = y[s_size - 1] * l[s_size - 1];
+		}
+		if (rank == 1){
+			for (int i = 1; i < s_size - 1; i++){
+				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+			}
 		}
 
 		for (int owners = 1; owners < size; owners*=2){
@@ -138,35 +145,20 @@ public:
 					MPI_Send(&stly, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
 				}
 			} else if (rank%(2*owners) < owners){//эти отправляют l
-				MPI_Isend(&l[s_size - 1], 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD, &srequest);
-				for (int i = 1; i < s_size - 1; i++){
-					b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-				}
-				MPI_Wait(&srequest, &status);
-				MPI_Send(&b[s_size - 1], 1, MPI_DOUBLE, rank+owners, proc, MPI_COMM_WORLD);
+				MPI_Send(&l[s_size - 1], 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
 			}
 			else {//эти принимают
 				if (rank < owners * 2){//принимают y
-					MPI_Irecv(&tly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &rrequest);
+					MPI_Recv(&tly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &status);
 
-					for (int i = 1; i < s_size - 1; i++){
-						b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-					}
-				
-					MPI_Wait(&rrequest, &status);
 					y[0] = b[0] - tly;
 					y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
 
 					if (owners * 2 < size){
 						stly = y[s_size - 1] * l[s_size - 1];
-						MPI_Isend(&stly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &srequest);//Danger!No wait!
+						MPI_Send(&stly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
 					}
-#pragma omp parallel for
-					for (int i = 0; i < s_size - 2; i++){
-						y[i + 1] = b[i + 1] - l[i] * y[0];
-					} //считает себе
-				}
-				else {//принимают l
+				} else {//принимают l
 					MPI_Recv(&ll, 1, MPI_DOUBLE, rank-owners, proc, MPI_COMM_WORLD, &status);
 					l[0] = -ll * l[0];
 					for (int i = 1; i < s_size; i++){
@@ -177,7 +169,6 @@ public:
 					}
 				}
 			}
-		}
 		/*
 		switch (rank){
 		case 0:
@@ -231,6 +222,11 @@ public:
 			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
 		}
 		*/
+#pragma omp parallel for
+			for (int i = 0; i < s_size - 2; i++){
+				y[i + 1] = b[i + 1] - l[i] * y[0];
+			} //считает себе
+		}
 		if (rank < size - 1){
 			MPI_Irecv(&tx, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &rrequest);
 		}
