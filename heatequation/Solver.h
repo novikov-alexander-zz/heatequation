@@ -238,33 +238,73 @@ public:
 		}
 		*/
 
-
-		if (rank < size - 1){
-			MPI_Irecv(&tx, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &rrequest);
-		}
-
-		y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
-		um[s_size - 1] = -beta / u[s_size - 1];
-		for (int i = s_size - 2; i >= 0; --i){
-			y[i] = (-beta*y[i + 1] + y[i]) / u[i];
-			um[i] = -beta*um[i + 1] / u[i];
-		}
-
-		if (rank < size - 1){
-			MPI_Wait(&rrequest, &status);
-			x[s_size - 1] = y[s_size - 1] - tx * beta / u[s_size - 1];
-		}
-		else {
+		if (rank == size - 1){//делаем его новичком
+			y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
+			um[s_size - 1] = -beta / u[s_size - 1];
+			for (int i = s_size - 2; i >= 0; --i){
+				y[i] = (-beta*y[i + 1] + y[i]) / u[i];
+				um[i] = -beta*um[i + 1] / u[i];
+			}
 			x[s_size - 1] = y[s_size - 1];
-		}
-
-		x[0] = y[0] + um[0] * x[s_size - 1];
-		if (rank != 0)
-			MPI_Isend(&x[0], 1, MPI_DOUBLE, rank - 1, proc, MPI_COMM_WORLD, &srequest);
+			x[0] = y[0] + um[0] * x[s_size - 1];
 
 #pragma omp parallel for 
-		for (int i = s_size - 2; i > 0; --i){
-			x[i] = y[i] + um[i] * x[s_size - 1];
+			for (int i = s_size - 2; i > 0; --i){
+				x[i] = y[i] + um[i] * x[s_size - 1];
+			}
+			//считает себе
+		}
+		if (rank == 1){
+			y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
+			um[s_size - 1] = -beta / u[s_size - 1];
+			for (int i = s_size - 2; i >= 0; --i){
+				y[i] = (-beta*y[i + 1] + y[i]) / u[i];
+				um[i] = -beta*um[i + 1] / u[i];
+			}
+		}
+
+		int sizem = size - 1;
+		for (int owners = 1; owners < size; owners *= 2){
+			if (sizem - rank < owners){//они шлют x
+				if (sizem - rank < owners / 2){//старички
+					MPI_Recv(&x[0], 1, MPI_DOUBLE, rank - owners / 2, proc, MPI_COMM_WORLD, &status);
+					MPI_Send(&x[0], 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
+				}
+				else {//новички
+					MPI_Send(&x[0], 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
+				}
+			}
+			else if ((sizem - rank) % (2 * owners) < owners){//эти отправляют um
+				MPI_Send(&um[0], 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
+			}
+			else {//эти принимают
+				if (sizem - rank < owners * 2){//принимают x
+					MPI_Recv(&tx, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD, &status);
+
+					x[s_size - 1] = y[s_size - 1] - tx * beta / u[s_size - 1];
+					x[0] = y[0] + um[0] * x[s_size - 1];
+
+					if (owners * 2 < size){
+						MPI_Isend(&x[0], 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD, &srequest);
+					}
+#pragma omp parallel for 
+					for (int i = s_size - 2; i > 0; --i){
+						x[i] = y[i] + um[i] * x[s_size - 1];
+					}//считает себе
+					if (owners * 2 < size){
+						MPI_Wait(&srequest, &status);
+					}
+				}
+				else {//принимают um
+					MPI_Recv(&um[s_size - 1], 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD, &status);
+					y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
+					um[s_size - 1] = -beta / u[s_size - 1];
+					for (int i = s_size - 2; i >= 0; --i){
+						y[i] = (-beta*y[i + 1] + y[i]) / u[i];
+						um[i] = -beta*um[i + 1] / u[i];
+					}
+				}
+			}
 		}
 	}
 
