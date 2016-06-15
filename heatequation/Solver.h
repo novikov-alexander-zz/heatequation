@@ -23,10 +23,9 @@ public:
 	}
 	*/
 	//тут f понимается в обычном смысле без минуса.
-	inline void tma_seq(double *dst, double gamma, double alpha, double beta, int s_size, double *f, int step)
+	inline void tma_seq(double *dst, double gamma, double alpha, double beta, int s_size, double *f, int step, double* p, double* q)
 	{
 		alpha = -alpha;///!!! чтобы соответствовать Самарскому Гулину
-		double *p = new double[s_size], *q = new double[s_size];
 		double *y = dst;
 		double kap0 = beta / alpha, kap1 = gamma / alpha;
 		double mu0 = -f[0] / alpha, mu1 = -f[(s_size - 1)*step] / alpha;
@@ -40,8 +39,6 @@ public:
 		y[(s_size - 1)*step] = (mu1 + kap1*q[s_size - 2]) / (1 - p[s_size - 2] * kap1);
 		for (int i = s_size - 2; i >= 0; --i)
 			y[i*step] = p[i] * y[(i + 1)*step] + q[i];
-		delete[] p;
-		delete[] q;
 	}
 
 	inline void tma_prepare(double gamma, double alpha, double beta, int s_size){
@@ -325,22 +322,24 @@ public:
 		double **bb = new double*[maxj];
 		int threads = omp_get_max_threads();
 
-		static double *um, *y;
+		static double *um, *y, *p, *q;
 
 #pragma omp threadprivate(um)
 #pragma omp threadprivate(y)
+#pragma omp threadprivate(p)
+#pragma omp threadprivate(q)
 
 #pragma omp parallel
 		{
 			um = new double[maxi];
 			y = new double[maxi];
+			p = new double[maxj];
+			q = new double[maxj];
 #pragma omp for
 			for (int j = 0; j < maxj; j++){
 				bb[j] = &b[j*maxi];
 			}
 		}
-
-		
 
 		tma_prepare(1.0 / xx, -1.0 / (tau / 2) - 2.0 / xx, 1.0 / xx, maxi);
 
@@ -381,7 +380,7 @@ public:
 				b[i] -= getBounds(i, 0) / yy;
 				b[(maxj - 1)*maxi + i] -= getBounds(i, src->y - 1) / yy;
 
-				tma_seq(&dstData[i], 1.0 / yy, -1.0 / (tau / 2) - 2.0 / yy, 1.0 / yy, maxj, &b[i], maxi);
+				tma_seq(&dstData[i], 1.0 / yy, -1.0 / (tau / 2) - 2.0 / yy, 1.0 / yy, maxj, &b[i], maxi, p, q);
 			}
 			Grid* t = dst;
 			dst = src;
