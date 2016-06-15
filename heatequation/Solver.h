@@ -121,6 +121,63 @@ public:
 		int proc = omp_get_thread_num();
 		double *x = dst;
 		
+		if (rank == 0){//делаем его новичком
+			for (int i = 1; i < s_size - 1; i++){
+				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+			}
+			y[0] = b[0];
+			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
+		}
+
+		for (int owners = 1; owners < size; owners*=2){
+			if (rank < owners){//они шлют игреки
+				if (rank < owners/2){//старички
+					MPI_Recv(&stly, 1, MPI_DOUBLE, rank + owners/2, proc, MPI_COMM_WORLD, &status);
+					MPI_Send(&stly, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
+				} else {//новички
+					stly = y[s_size - 1] * l[s_size - 1];
+					MPI_Send(&stly, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
+				}
+			} else if (rank%(2*owners) < owners){//эти отправляют l
+				for (int i = 1; i < s_size - 1; i++){
+					b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+				}
+				MPI_Send(&l[s_size - 1], 1, MPI_DOUBLE, rank+owners, proc, MPI_COMM_WORLD);
+				MPI_Send(&b[s_size - 1], 1, MPI_DOUBLE, rank+owners, proc, MPI_COMM_WORLD);
+			}
+			else {//эти принимают
+				if (rank < owners * 2){//принимают y
+					for (int i = 1; i < s_size - 1; i++){
+						b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+					}
+
+					MPI_Recv(&tly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &status);
+
+					y[0] = b[0] - tly;
+					y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
+
+					if (owners * 2 < size){
+						MPI_Send(&stly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
+					}
+#pragma omp parallel for
+					for (int i = 0; i < s_size - 2; i++){
+						y[i + 1] = b[i + 1] - l[i] * y[0];
+					} //считает себе
+				}
+				else {//принимают l
+					MPI_Recv(&ll, 1, MPI_DOUBLE, rank-owners, proc, MPI_COMM_WORLD, &status);
+					MPI_Recv(&lb, 1, MPI_DOUBLE, rank-owners, proc, MPI_COMM_WORLD, &status);
+					l[0] = -ll * l[0];
+					for (int i = 1; i < s_size; i++){
+						l[i] = -l[i - 1] * l[i];
+					}
+					for (int i = 1; i < s_size - 1; i++){
+						b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
+					}
+				}
+			}
+		}
+		/*
 		switch (rank){
 		case 0:
 			for (int i = 1; i < s_size - 1; i++){
@@ -135,10 +192,12 @@ public:
 			MPI_Send(&stly, 1, MPI_DOUBLE, 2, proc, MPI_COMM_WORLD);
 			break;
 		case 1:
-			MPI_Recv(&tly, 1, MPI_DOUBLE, 0, proc, MPI_COMM_WORLD, &status);
 			for (int i = 1; i < s_size - 1; i++){
 				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
 			}
+
+			MPI_Recv(&tly, 1, MPI_DOUBLE, 0, proc, MPI_COMM_WORLD, &status);
+			
 			y[0] = b[0] - tly;
 			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
 
@@ -170,14 +229,9 @@ public:
 			y[0] = b[0] - tly;
 			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
 		}
-
+		*/
 		if (rank < size - 1){
 			MPI_Irecv(&tx, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &rrequest);
-		}
-
-#pragma omp parallel for
-		for (int i = 0; i < s_size - 2; i++){
-			y[i + 1] = b[i + 1] - l[i] * y[0];
 		}
 
 		y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
