@@ -182,7 +182,7 @@ public:
 			x[s_size - 1] = y[s_size - 1] - tx * beta / u[s_size - 1];
 		}
 		else {
-			x[s_size - 1] = y[s_size - 1] / u[s_size - 1];
+			x[s_size - 1] = y[s_size - 1];
 		}
 
 		x[0] = y[0] + um[0] * x[s_size - 1];
