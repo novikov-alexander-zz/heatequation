@@ -162,12 +162,15 @@ public:
 
 					if (owners * 2 < size){
 						stly = y[s_size - 1] * l[s_size - 1];
-						MPI_Send(&stly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
+						MPI_Isend(&stly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &srequest);
 					}
 #pragma omp parallel for
 					for (int i = 0; i < s_size - 2; i++){
 						y[i + 1] = b[i + 1] - l[i] * y[0];
 					} //считает себе
+					if (owners * 2 < size){
+						MPI_Wait(&srequest, &status);
+					}
 				}
 				else {//принимают l
 					MPI_Recv(&ll, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &status);
