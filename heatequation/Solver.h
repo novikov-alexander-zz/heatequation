@@ -46,7 +46,7 @@ public:
 
 	inline void tma_prepare(double gamma, double alpha, double beta, int s_size){
 		MPI_Status status;
-		MPI_Request request;
+		MPI_Request rrequest, srequest;
 		if (u)
 			delete[] u;
 		u = new double[s_size];
@@ -71,7 +71,7 @@ public:
 			}
 			u[1] = T[1];
 			u[s_size - 1] = S[s_size - 1] + u[s_size-1] / (u[0] + t[s_size - 2]);
-			MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD, &request);
+			MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD, &srequest);
 #pragma omp parallel for
 			for (int i = 1; i < s_size - 1; i++){
 				u[i] = S[i] + u[i] / (u[0] + t[i - 1]);
@@ -82,7 +82,7 @@ public:
 		}
 		else {
 			double tu;
-			MPI_Irecv(&tu, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &request);
+			MPI_Irecv(&tu, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &rrequest);
 			t[0] = 0;
 			S[0] = alpha;
 			T[0] = -beta*gamma;
@@ -93,10 +93,10 @@ public:
 				u[i] = T[i] - S[i] * t[i];
 			}
 			u[0] = T[0];
-			MPI_Wait(&request, &status);
+			MPI_Wait(&rrequest, &status);
 			u[s_size - 1] = S[s_size - 1] + u[s_size - 1] / (tu + t[s_size - 1]);
 			if (rank < size - 1){
-				MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &request);
+				MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &srequest);
 			}
 #pragma omp parallel for
 			for (int i = 0; i < s_size - 1; i++){
@@ -117,7 +117,7 @@ public:
 	inline void tma(double* dst, int s_size, double *b, double *um, double *y){
 		MPI_Status status;
 		MPI_Request srequest, rrequest;
-		double tly, tx;
+		double tly, tx,stly;
 		int proc = omp_get_thread_num();
 		double *x = dst;
 		
@@ -156,11 +156,12 @@ public:
 		}
 	} 
 */
+
 		y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
 
 		if (rank < size - 1){
-			double tly = y[s_size - 1] * l[s_size - 1];
-			MPI_Isend(&tly, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &srequest);
+		    stly = y[s_size - 1] * l[s_size - 1];
+			MPI_Isend(&stly, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &srequest);
 			MPI_Irecv(&tx, 1, MPI_DOUBLE, rank + 1, proc, MPI_COMM_WORLD, &rrequest);
 		}
 
@@ -174,7 +175,6 @@ public:
 		for (int i = s_size - 2; i >= 0; --i){
 			y[i] = (-beta*y[i + 1] + y[i]) / u[i];
 			um[i] = -beta*um[i + 1] / u[i];
-			std::cout << um[i] << std::endl;
 		}
 
 		if (rank < size - 1){
