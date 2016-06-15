@@ -168,7 +168,6 @@ public:
 				}
 				else {//принимают l
 					MPI_Recv(&ll, 1, MPI_DOUBLE, rank-owners, proc, MPI_COMM_WORLD, &status);
-					MPI_Recv(&lb, 1, MPI_DOUBLE, rank-owners, proc, MPI_COMM_WORLD, &status);
 					l[0] = -ll * l[0];
 					for (int i = 1; i < s_size; i++){
 						l[i] = -l[i - 1] * l[i];
