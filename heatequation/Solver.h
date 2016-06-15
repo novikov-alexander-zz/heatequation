@@ -135,7 +135,6 @@ public:
 					MPI_Recv(&stly, 1, MPI_DOUBLE, rank + owners/2, proc, MPI_COMM_WORLD, &status);
 					MPI_Send(&stly, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
 				} else {//новички
-					stly = y[s_size - 1] * l[s_size - 1];
 					MPI_Send(&stly, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
 				}
 			} else if (rank%(2*owners) < owners){//эти отправл€ют l
@@ -157,6 +156,7 @@ public:
 					y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
 
 					if (owners * 2 < size){
+						stly = y[s_size - 1] * l[s_size - 1];
 						MPI_Send(&stly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
 					}
 #pragma omp parallel for
