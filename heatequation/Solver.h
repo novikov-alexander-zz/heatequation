@@ -8,6 +8,7 @@ class Solver{
 public:
 	double tau;
 	double *u, *l;
+	double leftl;
 	double beta;
 	/*	inline int solve(Grid *src, Grid *dst){
 	double step = src->getStep();
@@ -41,7 +42,7 @@ public:
 			y[i*step] = p[i] * y[(i + 1)*step] + q[i];
 	}
 
-	inline void tma_prepare(double gamma, double alpha, double beta, int s_size){
+	inline void tma_prepare(double gamma, double alpha, double beta, int tx, int s_size){
 		MPI_Status status;
 		MPI_Request rrequest, srequest;
 		if (u)
@@ -54,136 +55,106 @@ public:
 #pragma omp parallel for
 			for (int i = 0; i < s_size; i++){
 				u[i] = alpha;
-				l[i] = gamma / alpha;
-			}		
+			}
+			leftl = pow(-gamma / alpha, tx);
+			l[0] = -pow( - gamma / alpha, tx+1);
 		for (int i = 1; i < s_size; i++){
-			l[i] = -l[i - 1] * l[i];
+			l[i] = -l[i - 1] * l[i];//тут все верно
 		}
 	}
 
 	inline void tma(double* dst, int s_size, double *b, double *um, double *y){
 		MPI_Status status;
 		MPI_Request srequest, rrequest;
-		double tly, tx,stly, rmul, ll, lb;
+		double y_to_r, y_from_l, b_from_l, b_to_r, tx;
+		//double tly, tx,stly, rmul, ll, lb;
 		int proc = omp_get_thread_num();
 		double *x = dst;
-		
-		if (rank == 0){//делаем его новичком
-			for (int i = 1; i < s_size - 1; i++){
-				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-			}
-			y[0] = b[0];
-			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
 
-			stly = y[s_size - 1] * l[s_size - 1];
+		int owners = 1;
+
+		if (rank == 0){//делаем его новичком
+			for (int i = 0; i < s_size - 1; i++){
+				b[i + 1] += -l[i] * b[i] ;
+			}
+
+			y[0] = b[0];
+
 #pragma omp parallel for
-			for (int i = 0; i < s_size - 2; i++){
+			for (int i = 0; i < s_size - 1; i++){
 				y[i + 1] = b[i + 1] - l[i] * y[0];
 			} //считает себе
-		}
-		if (rank == 1){
-			for (int i = 1; i < s_size - 1; i++){
-				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-			}
-		}
 
-		for (int owners = 1; owners < size; owners *= 2){
-			if (rank < owners){//они шлют игреки
-				if (rank < owners / 2){//старички
-					MPI_Recv(&stly, 1, MPI_DOUBLE, rank + owners / 2, proc, MPI_COMM_WORLD, &status);
-					MPI_Send(&stly, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
-				}
-				else {//новички
-					MPI_Send(&stly, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
+			y_to_r = y[s_size - 1];
+		}
+		else {
+
+			if (rank == 1){//готовим принимать y
+				for (int i = 1; i < s_size - 1; i++){
+					b[i + 1] += -l[i] * b[i];
 				}
 			}
-			else if (rank % (2 * owners) < owners){//эти отправляют l
-				MPI_Send(&l[s_size - 1], 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
-			}
-			else {//эти принимают
-				if (rank < owners * 2){//принимают y
-					MPI_Recv(&tly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &status);
 
-					y[0] = b[0] - tly;
-					y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
-
-					if (owners * 2 < size){
-						stly = y[s_size - 1] * l[s_size - 1];
-						MPI_Isend(&stly, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &srequest);
+			while (rank > owners){
+				if (rank % (2 * owners) < owners){//эти отправляют b
+					if (rank / owners < owners / 2){//старички
+						MPI_Recv(&b_to_r, 1, MPI_DOUBLE, rank + owners / 2, proc, MPI_COMM_WORLD, &status);
+						MPI_Send(&b_to_r, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
 					}
+					else {//новички
+						MPI_Send(&b[s_size - 1], 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
+					}
+				}
+				else {//эти принимают
+					if (rank < owners * 2){//принимают y
+						MPI_Recv(&y_from_l, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &status);
+
+						y[0] = b[0] - leftl*y_from_l;
+						y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y_from_l;
+
+						if (owners * 2 < size){//посылает, что получилось приславшему
+							y_to_r = y[s_size - 1];
+							MPI_Isend(&y_to_r, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &srequest);
+						}
+
 #pragma omp parallel for
-					for (int i = 0; i < s_size - 2; i++){
-						y[i + 1] = b[i + 1] - l[i] * y[0];
-					} //считает себе
-					if (owners * 2 < size){
-						MPI_Wait(&srequest, &status);
+						for (int i = 0; i < s_size - 2; i++){
+							y[i + 1] = b[i + 1] - l[i] * y[0];
+						} //считает себе
+
+						if (owners * 2 < size){
+							MPI_Wait(&srequest, &status);
+						}
 					}
-				}
-				else {//принимают l
-					MPI_Recv(&ll, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &status);
-					l[0] = -ll * l[0];
-					for (int i = 1; i < s_size; i++){
-						l[i] = -l[i - 1] * l[i];
+					else {//принимают b
+						MPI_Recv(&b_from_l, 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD, &status);
+						b[0] += -leftl*b_from_l;
+						for (int i = 1; i < s_size - 1; i++){
+							b[i + 1] += -l[i] * b[i];
+						}
+						if (owners * 2 < size){//посылает, что получилось приславшему
+							MPI_Send(&b[s_size - 1], 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
+						}
 					}
-					for (int i = 1; i < s_size - 1; i++){
-						b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-					}
+					owners *= 2;
 				}
 			}
 		}
-		/*
-		switch (rank){
-		case 0:
-			for (int i = 1; i < s_size - 1; i++){
-				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-			}
-			y[0] = b[0];
-			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
-
-			stly = y[s_size - 1] * l[s_size - 1];
-			MPI_Send(&stly, 1, MPI_DOUBLE, 1, proc, MPI_COMM_WORLD);
-			MPI_Recv(&stly, 1, MPI_DOUBLE, 1, proc, MPI_COMM_WORLD, &status);
-			MPI_Send(&stly, 1, MPI_DOUBLE, 2, proc, MPI_COMM_WORLD);
-			break;
-		case 1:
-			for (int i = 1; i < s_size - 1; i++){
-				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-			}
-
-			MPI_Recv(&tly, 1, MPI_DOUBLE, 0, proc, MPI_COMM_WORLD, &status);
-			
-			y[0] = b[0] - tly;
-			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
-
-			stly = y[s_size - 1] * l[s_size - 1];
-			MPI_Send(&stly, 1, MPI_DOUBLE, 0, proc, MPI_COMM_WORLD);
-			MPI_Send(&stly, 1, MPI_DOUBLE, 3, proc, MPI_COMM_WORLD);
-			break;
-		case 2:
-			for (int i = 1; i < s_size - 1; i++){
-				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-			}
-			MPI_Send(&l[s_size - 1], 1, MPI_DOUBLE, 3, proc, MPI_COMM_WORLD);
-			MPI_Send(&b[s_size - 1], 1, MPI_DOUBLE, 3, proc, MPI_COMM_WORLD);
-			MPI_Recv(&tly, 1, MPI_DOUBLE, 0, proc, MPI_COMM_WORLD, &status);
-			y[0] = b[0] - tly;
-			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
-			break;
-		case 3:
-			MPI_Recv(&ll, 1, MPI_DOUBLE, 2, proc, MPI_COMM_WORLD, &status);
-			MPI_Recv(&lb, 1, MPI_DOUBLE, 2, proc, MPI_COMM_WORLD, &status);
-			l[0] = -ll * l[0];
-			for (int i = 1; i < s_size; i++){
-				l[i] = -l[i - 1] * l[i];
-			}
-			for (int i = 1; i < s_size - 1; i++){
-				b[i + 1] = -l[i - 1] * b[i + 1] + b[i];
-			}
-			MPI_Recv(&tly, 1, MPI_DOUBLE, 1, proc, MPI_COMM_WORLD, &status);
-			y[0] = b[0] - tly;
-			y[s_size - 1] = b[s_size - 1] - l[s_size - 2] * y[0];
+		
+		if (rank < owners){//шлет свой y
+			MPI_Send(&y_to_r, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
+			owners *= 2;
 		}
-		*/
+
+		while (owners < size){
+			MPI_Recv(&y_to_r, 1, MPI_DOUBLE, rank + owners / 2, proc, MPI_COMM_WORLD, &status);
+			MPI_Send(&y_to_r, 1, MPI_DOUBLE, rank + owners, proc, MPI_COMM_WORLD);
+			owners *= 2;
+		}
+		
+
+
+		//переходим к обратному шагу
 
 		if (rank == size - 1){//делаем его новичком
 			y[s_size - 1] = y[s_size - 1] / u[s_size - 1];
@@ -222,7 +193,13 @@ public:
 				}
 			}
 			else if ((sizem - rank) % (2 * owners) < owners){//эти отправляют um
-				MPI_Send(&um[0], 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
+				if (sizem - rank < owners / 2){//старички
+					MPI_Recv(&um[0], 1, MPI_DOUBLE, rank - owners / 2, proc, MPI_COMM_WORLD, &status);
+					MPI_Send(&um[0], 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
+				}
+				else {//новички
+					MPI_Send(&um[0], 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
+				}
 			}
 			else {//эти принимают
 				if (sizem - rank < owners * 2){//принимают x
@@ -249,6 +226,9 @@ public:
 					for (int i = s_size - 2; i >= 0; --i){
 						y[i] = (-beta*y[i + 1] + y[i]) / u[i];
 						um[i] = -beta*um[i + 1] / u[i];
+					}
+					if (owners * 2 < size){//посылает, что получилось приславшему
+						MPI_Send(&um[s_size - 1], 1, MPI_DOUBLE, rank - owners, proc, MPI_COMM_WORLD);
 					}
 				}
 			}
@@ -291,7 +271,7 @@ public:
 			}
 		}
 
-		tma_prepare(1.0 / xx, -1.0 / (tau / 2) - 2.0 / xx, 1.0 / xx, maxi);
+		tma_prepare(1.0 / xx, -1.0 / (tau / 2) - 2.0 / xx, 1.0 / xx, src->overallx, maxi);
 
 		for (int it = 0; it < iters; ++it){
 
