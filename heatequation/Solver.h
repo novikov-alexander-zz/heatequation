@@ -51,64 +51,14 @@ public:
 			delete[] l;
 		l = new double[s_size];
 		this->beta = beta;
-		double *S = new double[s_size];
-		double *t = new double[s_size];
-		double *T = new double[s_size];
-		if (rank == 0){
-			u[0] = alpha;
-			t[0] = 0;
-			S[1] = alpha;
-			T[1] = -beta*gamma;
-
-			for (int i = 2; i < s_size; i++){
-				S[i] = alpha - beta*gamma / S[i - 1];
-				T[i] = (alpha*T[i - 1] - beta*gamma*t[i - 2]) / S[i - 1];
-				t[i - 1] = T[i - 1] / S[i - 1];
-				u[i] = T[i] - S[i] * t[i - 1];
-			}
-			u[1] = T[1];
-			u[s_size - 1] = S[s_size - 1] + u[s_size-1] / (u[0] + t[s_size - 2]);
-			MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD, &srequest);
 #pragma omp parallel for
-			for (int i = 1; i < s_size - 1; i++){
-				u[i] = S[i] + u[i] / (u[0] + t[i - 1]);
-				l[i] = gamma / u[i];
-			}
-			l[0] = gamma / u[0];
-			l[s_size - 1] = gamma / u[s_size - 1];
-		}
-		else {
-			double tu;
-			MPI_Irecv(&tu, 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &rrequest);
-			t[0] = 0;
-			S[0] = alpha;
-			T[0] = -beta*gamma;
-			for (int i = 1; i < s_size; i++){
-				S[i] = alpha - beta*gamma / S[i - 1];
-				T[i] = (alpha*T[i - 1] - beta*gamma*t[i - 1]) / S[i - 1];
-				t[i] = T[i - 1] / S[i - 1];
-				u[i] = T[i] - S[i] * t[i];
-			}
-			u[0] = T[0];
-			MPI_Wait(&rrequest, &status);
-			u[s_size - 1] = S[s_size - 1] + u[s_size - 1] / (tu + t[s_size - 1]);
-			if (rank < size - 1){
-				MPI_Isend(&u[s_size - 1], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &srequest);
-			}
-#pragma omp parallel for
-			for (int i = 0; i < s_size - 1; i++){
-				u[i] = S[i] + u[i] / (tu + t[i]);
-				l[i] = gamma / u[i];
-			}
-			l[s_size - 1] = gamma / u[s_size - 1];
-		}
-		for (int i = 1; i < s_size - 1; i++){
+			for (int i = 0; i < s_size; i++){
+				u[i] = alpha;
+				l[i] = gamma / alpha;
+			}		
+		for (int i = 1; i < s_size; i++){
 			l[i] = -l[i - 1] * l[i];
 		}
-		l[s_size - 1] = -l[s_size - 2] * l[s_size - 1];
-		delete[] S;
-		delete[] t;
-		delete[] T;
 	}
 
 	inline void tma(double* dst, int s_size, double *b, double *um, double *y){

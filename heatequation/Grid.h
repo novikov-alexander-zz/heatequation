@@ -8,7 +8,7 @@ public:
 	double *data;
 	double height, width;
 	int x, y;
-
+	int overallx;
 	double getXStep(){
 		return xstep;
 	}
@@ -30,6 +30,7 @@ public:
 
 		this->x = x;
 		this->y = y;
+		this->overallx = i1x;
 		data = new double[x*y];
 	}
 
